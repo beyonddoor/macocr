@@ -62,6 +62,57 @@ class Runner {
         return urls
     }
 
+    // process OCR on clipboard image
+    static func processClipboard(callback:@escaping (Int32, String)->()) {
+        
+        // 获取剪贴板中的数据
+        let pasteboard = NSPasteboard.general
+        let pasteboardType = NSPasteboard.PasteboardType.tiff
+        guard let imageData = pasteboard.data(forType: pasteboardType) else {
+            error(str:"无法获取剪贴板中的图像数据")
+            callback(1, "")
+            return
+        }
+
+        // 从图像数据创建NSImage对象
+        guard let image = NSImage(data: imageData) else {
+            error(str:"无法创建NSImage对象")
+            callback(1, "")
+            return
+        }
+        
+        processOcrImage(img:image, callback: callback)
+    }
+    
+    static func error(str:String) {
+        fputs(str, stderr)
+    }
+    
+    static func processOcrImage(img:NSImage, callback: @escaping (Int32, String)->()) {
+        let desc = img.debugDescription
+        guard let imgRef = img.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            fputs("Error: failed to convert NSImage to CGImage\n", stderr)
+            callback(1,"")
+            return
+        }
+
+        let request = VNRecognizeTextRequest { (request, error) in
+            let observations = request.results as? [VNRecognizedTextObservation] ?? []
+            let obs : [String] = observations.map { $0.topCandidates(1).first?.string ?? ""}
+            let content = obs.joined(separator: "\n")
+//            try? content.write(to: url.appendingPathExtension("md"), atomically: true, encoding: String.Encoding.utf8)
+            fputs("got page obs is \(obs)", stderr)
+            puts("image is \(img)");
+            callback(0, content)
+        }
+        request.recognitionLevel = VNRequestTextRecognitionLevel.accurate // or .fast
+        request.usesLanguageCorrection = true
+        request.revision = VNRecognizeTextRequestRevision2
+        request.recognitionLanguages = ["zh"]
+        // request.customWords = ["der", "Der", "Name"]
+
+        try? VNImageRequestHandler(cgImage: imgRef, options: [:]).perform([request])
+    }
 
 static func run(files: [String]) -> Int32 {
 
@@ -76,33 +127,25 @@ static func run(files: [String]) -> Int32 {
     let urls = files.map {
         URL(fileURLWithPath: $0)
     }
+    
+    if(urls.isEmpty) {
+        processClipboard(callback: {(code, content)->() in
+            if code == 0 {
+                puts(content)
+            }
+        })
+        return 0
+    }
 
     for url in urls {
-
         let img = NSImage(byReferencing: url)
-
-
-
-    let desc = img.debugDescription
-        guard let imgRef = img.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            fputs("Error: failed to convert NSImage to CGImage for '\(url)'\n", stderr)
-            return 1
-        }
-
-        let request = VNRecognizeTextRequest { (request, error) in
-            let observations = request.results as? [VNRecognizedTextObservation] ?? []
-            let obs : [String] = observations.map { $0.topCandidates(1).first?.string ?? ""}
-            try? obs.joined(separator: "\n").write(to: url.appendingPathExtension("md"), atomically: true, encoding: String.Encoding.utf8)
-
-            fputs("got page obs is \(obs)", stderr)
-        }
-        request.recognitionLevel = VNRequestTextRecognitionLevel.accurate // or .fast
-        request.usesLanguageCorrection = true
-        request.revision = VNRecognizeTextRequestRevision2
-        request.recognitionLanguages = ["de"]
-        request.customWords = ["der", "Der", "Name"]
-
-        try? VNImageRequestHandler(cgImage: imgRef, options: [:]).perform([request])
+        processOcrImage(img:img, callback: {(code, content) ->() in
+            if (code == 0) {
+                try? content.write(to: url.appendingPathExtension("md"), atomically: true, encoding: String.Encoding.utf8)
+            } else {
+                
+            }
+        })
     }
     return 0
 }

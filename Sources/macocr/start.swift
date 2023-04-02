@@ -12,9 +12,7 @@ struct Repeat: ArgumentParser.ParsableCommand {
     @Argument(completion: .file(extensions: ["jpg","jpeg","png","tiff"]))
     var files: [String] = []
 
-
     mutating func run() throws {
         Runner.run( files: files)
-
     }
 }
