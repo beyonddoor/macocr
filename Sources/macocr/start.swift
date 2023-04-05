@@ -4,6 +4,9 @@ import ArgumentParser
 struct Repeat: ArgumentParser.ParsableCommand {
     @Flag(inversion: FlagInversion.prefixedNo, help: "fast")
     var fast = false
+    
+    @Flag(inversion: FlagInversion.prefixedNo, help: "fast")
+    var prettifyText = false
 
 
     // @Option(name: .shortAndLong, help: "User word file")
@@ -13,6 +16,6 @@ struct Repeat: ArgumentParser.ParsableCommand {
     var files: [String] = []
 
     mutating func run() throws {
-        Runner.run( files: files)
+        Runner.run(context: self)
     }
 }

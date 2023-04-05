@@ -102,7 +102,6 @@ class Runner {
             let content = obs.joined(separator: "\n")
 //            try? content.write(to: url.appendingPathExtension("md"), atomically: true, encoding: String.Encoding.utf8)
             fputs("got page obs is \(obs)", stderr)
-            puts("image is \(img)");
             callback(0, content)
         }
         request.recognitionLevel = VNRequestTextRecognitionLevel.accurate // or .fast
@@ -113,40 +112,50 @@ class Runner {
 
         try? VNImageRequestHandler(cgImage: imgRef, options: [:]).perform([request])
     }
-
-static func run(files: [String]) -> Int32 {
-
-
-    // Flag ideas:
-    // --version
-    // Print REVISION
-    // --langs
-    //guard let langs = VNRecognizeTextRequest.supportedRecognitionLanguages(for: .accurate, revision: REVISION)
-    // --fast (default accurate)
-    // --fix (default no language correction)
-    let urls = files.map {
-        URL(fileURLWithPath: $0)
-    }
     
-    if(urls.isEmpty) {
-        processClipboard(callback: {(code, content)->() in
-            if code == 0 {
-                puts(content)
+    static func doPrettify(string: String) -> String {
+        return string.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
+    }
+
+    static func run(context:Repeat) -> Int32 {
+        // Flag ideas:
+        // --version
+        // Print REVISION
+        // --langs
+        //guard let langs = VNRecognizeTextRequest.supportedRecognitionLanguages(for: .accurate, revision: REVISION)
+        // --fast (default accurate)
+        // --fix (default no language correction)
+        
+        let pretify = { (str:String) -> String in
+            if(context.prettifyText) {
+                return doPrettify(string: str)
             }
-        })
+            return str
+        }
+            
+        let urls = context.files.map {
+            URL(fileURLWithPath: $0)
+        }
+        
+        if(urls.isEmpty) {
+            processClipboard(callback: {(code, content)->() in
+                if code == 0 {
+                    print(pretify(content), terminator: "")
+                }
+            })
+            return 0
+        }
+
+        for url in urls {
+            let img = NSImage(byReferencing: url)
+            processOcrImage(img:img, callback: {(code, content) ->() in
+                if (code == 0) {
+                    try? pretify(content).write(to: url.appendingPathExtension("md"), atomically: true, encoding: String.Encoding.utf8)
+                } else {
+                    
+                }
+            })
+        }
         return 0
     }
-
-    for url in urls {
-        let img = NSImage(byReferencing: url)
-        processOcrImage(img:img, callback: {(code, content) ->() in
-            if (code == 0) {
-                try? content.write(to: url.appendingPathExtension("md"), atomically: true, encoding: String.Encoding.utf8)
-            } else {
-                
-            }
-        })
-    }
-    return 0
-}
 }
